@@ -1,96 +1,76 @@
-import joke
-import os
-from flask import Flask, redirect, request
-from flask import jsonify
 import requests
-from urllib.parse import quote
+from flask import Flask, jsonify, redirect, request, url_for
+
+from constants import STRAVA_API_URL, STRAVA_AUTH_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_DEAUTH_URL, STRAVA_TOKEN_URL
 from user import User
 
 app = Flask(__name__)
-client_id = os.environ.get('CLIENT_ID') # TODO: make a client
-client_secret = os.environ.get('CLIENT_SECRET')
 
 @app.route('/login')
 def login():
   # Redirects to Strava authorization
-  client_id = os.environ.get('CLIENT_ID')
-  redirect_uri = 'https://stravajokesv2.beelauuu.repl.co/create_callback' # TODO: use url_for to get correct redirect uri
+  redirect_uri = url_for('strava_callback')
   scopes = 'activity:write,activity:read_all'
-  authorization_url = f'https://www.strava.com/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
+  authorization_url = f'{STRAVA_AUTH_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
   return redirect(authorization_url)
 
 
 @app.route('/strava/callback')
 def strava_callback():
-    code = request.args.get('code')
     # Exchange the authorization code for an access token
-    token_url = 'https://www.strava.com/oauth/token'
-    payload = {
-        'client_id': os.environ.get('CLIENT_ID'),
-        'client_secret': os.environ.get('CLIENT_SECRET'),
-        'code': code,
+    response = requests.post(STRAVA_TOKEN_URL, data={
+        'client_id': STRAVA_CLIENT_ID,
+        'client_secret': STRAVA_CLIENT_SECRET,
+        'code': request.args.get('code'),
         'grant_type': 'authorization_code'
-    }
-    response = requests.post(token_url, data=payload)
+    })
     data = response.json()
         
-    if 'access_token' in data:
+    if 'refresh_token' in data:
         refresh_token = data['refresh_token']
-        user_id = data['athlete']['id']
-        User(user_id).refresh_token = refresh_token
-        return redirect("https://jokepy.vercel.app/message?message=" + # TODO: url_for
-            quote("Subscribed Successfully!"))
+        User(data['athlete']['id']).strava_refresh_token = refresh_token
+        return redirect(url_for('index', message='Subscribed successfully!'), 303)
     else:
-        # Failed to obtain access token
-        return redirect("https://jokepy.vercel.app/message?message=" +
-                        quote("Unable To Obtain Access Token"))
+        return redirect(url_for('index', message='EPIC FAIL!'), 303)
 
 
 @app.route('/delete')
-def deleteSubscription():
+def delete_subscription():
     # Authenticate to get users tokens again
-    client_id = os.environ.get('CLIENT_ID')
-    redirect_uri = 'https://stravajokesv2.beelauuu.repl.co/delete_callback'
+    redirect_uri = url_for('delete_subscription_callback', _external=True)
     scopes = 'activity:write,activity:read_all'
-    authorization_url = f'https://www.strava.com/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
+    authorization_url = f'{STRAVA_TOKEN_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
     return redirect(authorization_url)
 
 
-@app.route('/delete_callback')
-def deleteSubscriptionCallback():
+@app.route('/strava/delete')
+def delete_subscription_callback():
     code = request.args.get('code')
+    
     # Exchange the authorization code for an access token
-    token_url = 'https://www.strava.com/oauth/token'
-    payload = {
-        'client_id': os.environ.get('CLIENT_ID'),
-        'client_secret': os.environ.get('CLIENT_SECRET'),
+    response = requests.post(STRAVA_TOKEN_URL, data={
+        'client_id': STRAVA_CLIENT_ID,
+        'client_secret': STRAVA_CLIENT_SECRET,
         'code': code,
         'grant_type': 'authorization_code'
-    }
-    response = requests.post(token_url, data=payload)
+    })
     data = response.json()
     user_id = data['athlete']['id']
     existing_user = User(user_id)
 
     # Check if user is in the database
-    if existing_user.refresh_token:
-        # Doing the deleting
-        unsub_url = 'https://www.strava.com/oauth/deauthorize'
+    if existing_user.strava_refresh_token:
         params = {'access_token': data['access_token']}
-        response = requests.post(unsub_url, data=params)
-        existing_user.refresh_token = ''
-        
-        if response.status_code == 204 or response.status_code == 200:
-            return redirect("https://jokepy.vercel.app/message?message=" + # TODO: url_for
-                        quote("Deleted Successfully!"))
-        
-        else:
-            return redirect("https://jokepy.vercel.app/message?message=" +
-                        quote("Failed To Delete Subscription"))
-
+        response = requests.post(STRAVA_DEAUTH_URL, data=params)
+        deleted = response.status_code in (200, 204)
     else:
-        return redirect("https://jokepy.vercel.app/message?message=" +
-                        quote("Failed To Delete Subscription"))
+        deleted = True
+        
+    if deleted:
+        existing_user.strava_refresh_token = ''
+        return url_for('index', message='Removed subscription!')
+    else:
+        return url_for('index', message=f'EPIC FAIL! {response.status_code} {response.text}')
 
 
 # Creates the endpoint for our webhook
@@ -98,8 +78,50 @@ def deleteSubscriptionCallback():
 def webhook():
     print("Webhook event received!", request.args, request.json)
     if request.json and request.json['aspect_type'] == 'create' and request.json['object_type'] == 'activity':
-        joke.update_joke(User(request.json['owner_id'])) # TODO: chagne webhook magic
-        return 'JOKE_RECEIVED', 200
+        activity_id = request.json['object_id']
+        user = User(request.json['owner_id'])
+        if not user.strava_refresh_token:
+            print('User is not found!')
+            return 'EVENT_RECEIVED', 200
+        
+        #Retrieving refresh token
+        payload = {
+            'client_id': STRAVA_CLIENT_ID,
+            'client_secret': STRAVA_CLIENT_SECRET,
+            'grant_type': 'refresh_token',
+            'refresh_token': user.strava_refresh_token
+        }
+        response = requests.post(
+            STRAVA_TOKEN_URL,
+            data=payload,
+        )
+        json = response.json()
+        access_token = json['access_token']
+        
+        #Get current description
+        headers = {'Authorization': 'Bearer ' + access_token}
+        response = requests.get(
+            f'{STRAVA_API_URL}/activities/{activity_id}',
+            headers=headers,
+        )
+        current_description = json['description']
+        if current_description is None:
+            current_description = ''
+        
+        #Updating activity description
+        if ('🔒' not in current_description): # TODO: use database to determine if repeat
+            headers = {'Authorization': 'Bearer ' + access_token}
+            updatableActivity = {
+                    'description':
+                    '🔒\n'+
+                    '\n\n' + current_description
+            }
+            response = requests.put(
+                f'{STRAVA_API_URL}/activities/{activity_id}',
+                headers=headers,
+                params=updatableActivity
+            )
+        
     return 'EVENT_RECEIVED', 200
 
 
@@ -128,4 +150,4 @@ def verify_webhook():
 
 @app.route('/')
 def index():
-    return 'hiiiiiii'
+    return request.args.get('message', 'hiiiiiii')
