@@ -1,6 +1,5 @@
 import requests
 import os
-import random
 from user import User
 
 auth_url = 'https://www.strava.com/api/v3/oauth/token'

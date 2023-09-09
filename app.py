@@ -35,7 +35,6 @@ def strava_callback():
     data = response.json()
         
     if 'access_token' in data:
-        access_token = data['access_token']
         refresh_token = data['refresh_token']
         user_id = data['athlete']['id']
         User(user_id).refresh_token = refresh_token
