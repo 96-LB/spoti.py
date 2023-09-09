@@ -85,7 +85,7 @@ def webhook():
             print('User is not found!')
             return 'EVENT_RECEIVED', 200
         
-        #Retrieving refresh token
+        # Retrieving refresh token
         payload = {
             'client_id': STRAVA_CLIENT_ID,
             'client_secret': STRAVA_CLIENT_SECRET,
@@ -99,7 +99,7 @@ def webhook():
         json = response.json()
         access_token = json['access_token']
         
-        #Get current description
+        # Get current description
         headers = {'Authorization': 'Bearer ' + access_token}
         response = requests.get(
             f'{STRAVA_API_URL}/activities/{activity_id}',
@@ -108,8 +108,9 @@ def webhook():
         json = response.json()
         current_description = json.get('description', '')
         
-        #Updating activity description
-        if '🔒' not in current_description: # TODO: use database to determine if repeat
+        
+        if activity_id not in user.activities:
+            # Updating activity description
             headers = {'Authorization': 'Bearer ' + access_token}
             updatableActivity = {
                     'description':
@@ -121,6 +122,7 @@ def webhook():
                 headers=headers,
                 params=updatableActivity
             )
+            user.activities.append(activity_id)
         
     return 'EVENT_RECEIVED', 200
 
