@@ -228,5 +228,6 @@ def verify_webhook():
   return 'Bad Request', 400
 
 
-if __name__ == '__main__':
-  app.run('0.0.0.0')
+@app.route('/')
+def index():
+    return 'hiiiiiii'

@@ -1,0 +1,11 @@
+**/__pycache__
+\!TODO
+.breakpoints
+**/venv
+.pythonlibs
+replit.nix
+.replit
+.vscode
+/data/
+*.egg-info
+node_modules
