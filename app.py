@@ -5,11 +5,12 @@ from constants import STRAVA_API_URL, STRAVA_AUTH_URL, STRAVA_CLIENT_ID, STRAVA_
 from user import User
 
 app = Flask(__name__)
+app.config['SERVER_NAME'] = 'spotipy.lalabuff.com'
 
 @app.route('/login')
 def login():
   # Redirects to Strava authorization
-  redirect_uri = url_for('strava_callback')
+  redirect_uri = url_for('strava_callback', _external=True)
   scopes = 'activity:write,activity:read_all'
   authorization_url = f'{STRAVA_AUTH_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
   return redirect(authorization_url)
@@ -74,7 +75,7 @@ def delete_subscription_callback():
 
 
 # Creates the endpoint for our webhook
-@app.route('/webhook', methods=['POST'])
+@app.route('/strava/webhook', methods=['POST'])
 def webhook():
     print("Webhook event received!", request.args, request.json)
     if request.json and request.json['aspect_type'] == 'create' and request.json['object_type'] == 'activity':
@@ -104,12 +105,11 @@ def webhook():
             f'{STRAVA_API_URL}/activities/{activity_id}',
             headers=headers,
         )
-        current_description = json['description']
-        if current_description is None:
-            current_description = ''
+        json = response.json()
+        current_description = json.get('description', '')
         
         #Updating activity description
-        if ('🔒' not in current_description): # TODO: use database to determine if repeat
+        if '🔒' not in current_description: # TODO: use database to determine if repeat
             headers = {'Authorization': 'Bearer ' + access_token}
             updatableActivity = {
                     'description':
@@ -126,7 +126,7 @@ def webhook():
 
 
 # Adds support for GET requests to our webhook
-@app.route('/webhook', methods=['GET'])
+@app.route('/strava/webhook', methods=['GET'])
 def verify_webhook():
     # Your verify token. Should be a random string.
     VERIFY_TOKEN = 'BEELAU'
