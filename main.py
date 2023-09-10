@@ -1,7 +1,9 @@
-from flask import Flask, redirect, request, url_for
+from flask import Flask, redirect, request, session, url_for
 
-from constants import STRAVA_AUTH_URL, STRAVA_CLIENT_ID, STRAVA_TOKEN_URL
+from constants import SPOTIFY_AUTH_URL, SPOTIFY_CLIENT_ID, STRAVA_AUTH_URL, STRAVA_CLIENT_ID
 from user import User
+
+from typing import cast
 
 
 app = Flask(__name__)
@@ -25,30 +27,27 @@ def strava_callback():
     if not request.args.get('code'):
         return redirect(url_for('index', message='Invalid authorization code.'), 303)
     
-    User.strava_authorize(request.args['code'])
+    user = User.strava_authorize(request.args['code'])
+    session['user_id'] = user.id
     
-    return redirect(url_for('index', message='Subscribed successfully!'), 303)
-
-
-@app.route('/delete')
-def delete_subscription():
-    # Authenticate to get users tokens again
-    redirect_uri = url_for('strava_delete', _external=True)
-    scopes = 'activity:write,activity:read_all'
-    authorization_url = f'{STRAVA_TOKEN_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
+    redirect_uri = url_for('spotify_callback', _external=True)
+    scopes = 'user-read-recently-played,user-read-private,user-read-email'
+    authorization_url = f'{SPOTIFY_AUTH_URL}?client_id={SPOTIFY_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
     return redirect(authorization_url)
 
 
-@app.route('/strava/delete')
-def strava_delete():
+@app.route('/spotify/callback')
+def spotify_callback():
     if request.args.get('error'):
         return redirect(url_for('index', message='EPIC FAIL! ' + request.args['error']), 303)
     
     if not request.args.get('code'):
         return redirect(url_for('index', message='Invalid authorization code.'), 303)
     
-    User.strava_authorize(request.args['code']).strava_deauthorize()
-    return url_for('index', message='Removed subscription!')
+    id = cast(str, session['user_id'])
+    User(id).spotify_authorize(request.args['code'])
+    
+    return redirect(url_for('index', message='Subscribed successfully!'), 303)
 
 
 @app.route('/strava/webhook', methods=['POST'])

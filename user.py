@@ -2,7 +2,7 @@ from typing import Literal
 import requests
 from dataclasses import field
 
-from constants import STRAVA_API_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_DEAUTH_URL, STRAVA_TOKEN_URL
+from constants import SPOTIFY_API_URL, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_TOKEN_URL, STRAVA_API_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_TOKEN_URL
 from jsondata import JSONData
 
 
@@ -12,6 +12,9 @@ class User(JSONData, folder='data/users'):
     strava_refresh_token: str = ''
     strava_access_token: str = ''
     activities: list[int] = field(default_factory=list)
+    
+    spotify_refresh_token: str = ''
+    spotify_access_token: str = ''
     
     
     @classmethod
@@ -63,12 +66,48 @@ class User(JSONData, folder='data/users'):
         ).json()
     
     
-    def strava_deauthorize(self):
-        if self.active:
-            requests.post(
-                STRAVA_DEAUTH_URL,
-                data={
-                    'access_token': self.strava_access_token
-                }
-            )
-            self.active = False
+    def spotify_authorize(self, code: str):
+        json = requests.post(
+            SPOTIFY_TOKEN_URL,
+            data={
+                'client_id': SPOTIFY_CLIENT_ID,
+                'client_secret': SPOTIFY_CLIENT_SECRET,
+                'code': code,
+                'grant_type': 'authorization_code'
+            }
+        ).json()
+        
+        self.spotify_refresh_token = json['refresh_token']
+        self.spotify_access_token = json['access_token']
+        return self.spotify_access_token
+    
+    
+    def spotify_refresh(self):
+        json = requests.post(
+            SPOTIFY_TOKEN_URL,
+            data={
+                'client_id': SPOTIFY_CLIENT_ID,
+                'client_secret': SPOTIFY_CLIENT_SECRET,
+                'grant_type': 'refresh_token',
+                'refresh_token': self.spotify_refresh_token
+            }
+        ).json()
+        
+        self.spotify_access_token = json['access_token']
+        return self.spotify_access_token
+    
+    
+    def spotify_request(self, method: Literal['GET', 'POST', 'PATCH', 'PUT', 'DELETE'], url: str, data: dict[str, str] | None = None):
+        function = {
+            'GET': requests.get,
+            'POST': requests.post,
+            'PATCH': requests.patch,
+            'PUT': requests.put,
+            'DELETE': requests.delete
+        }[method]
+        
+        return function(
+            f'{SPOTIFY_API_URL}/{url}',
+            data=data,
+            headers={'Authorization': f'Bearer {self.spotify_access_token}'}
+        ).json()
