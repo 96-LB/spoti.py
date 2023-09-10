@@ -66,17 +66,18 @@ class User(JSONData, folder='data/users'):
         ).json()
     
     
-    def spotify_authorize(self, code: str):
+    def spotify_authorize(self, code: str, redirect_uri: str):
         json = requests.post(
             SPOTIFY_TOKEN_URL,
             data={
                 'client_id': SPOTIFY_CLIENT_ID,
                 'client_secret': SPOTIFY_CLIENT_SECRET,
                 'code': code,
-                'grant_type': 'authorization_code'
+                'grant_type': 'authorization_code',
+                'redirect_uri': redirect_uri
             }
         ).json()
-        
+        print(json)
         self.spotify_refresh_token = json['refresh_token']
         self.spotify_access_token = json['access_token']
         return self.spotify_access_token

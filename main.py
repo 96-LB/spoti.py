@@ -1,6 +1,6 @@
 from flask import Flask, redirect, request, session, url_for
 
-from constants import SPOTIFY_AUTH_URL, SPOTIFY_CLIENT_ID, STRAVA_AUTH_URL, STRAVA_CLIENT_ID
+from constants import SECRET_KEY, SPOTIFY_AUTH_URL, SPOTIFY_CLIENT_ID, STRAVA_AUTH_URL, STRAVA_CLIENT_ID
 from user import User
 
 from typing import cast
@@ -8,12 +8,15 @@ from typing import cast
 
 app = Flask(__name__)
 app.config['SERVER_NAME'] = 'spotipy.lalabuff.com'
+app.config['SECRET_KEY'] = SECRET_KEY
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+
 
 
 @app.route('/login')
 def login():
   # Redirects to Strava authorization
-  redirect_uri = url_for('strava_callback', _external=True)
+  redirect_uri = url_for('strava_callback', _external=True, _scheme='https')
   scopes = 'activity:write,activity:read_all'
   authorization_url = f'{STRAVA_AUTH_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
   return redirect(authorization_url)
@@ -29,8 +32,9 @@ def strava_callback():
     
     user = User.strava_authorize(request.args['code'])
     session['user_id'] = user.id
+    session.modified = True
     
-    redirect_uri = url_for('spotify_callback', _external=True)
+    redirect_uri = url_for('spotify_callback', _external=True, _scheme='https')
     scopes = 'user-read-recently-played,user-read-private,user-read-email'
     authorization_url = f'{SPOTIFY_AUTH_URL}?client_id={SPOTIFY_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
     return redirect(authorization_url)
@@ -45,7 +49,7 @@ def spotify_callback():
         return redirect(url_for('index', message='Invalid authorization code.'), 303)
     
     id = cast(str, session['user_id'])
-    User(id).spotify_authorize(request.args['code'])
+    User(id).spotify_authorize(request.args['code'], request.base_url.replace('http:', 'https:'))
     
     return redirect(url_for('index', message='Subscribed successfully!'), 303)
 

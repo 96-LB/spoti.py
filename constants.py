@@ -1,5 +1,8 @@
+from base64 import b64encode
 from os import environ
 
+
+SECRET_KEY = b64encode(environ['SECRET_KEY'].encode())
 
 STRAVA_API_URL = 'https://www.strava.com/api/v3'
 STRAVA_AUTH_URL = f'{STRAVA_API_URL}/oauth/authorize'
