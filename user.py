@@ -77,7 +77,7 @@ class User(JSONData, folder='data/users'):
                 'redirect_uri': redirect_uri
             }
         ).json()
-        print(json)
+
         self.spotify_refresh_token = json['refresh_token']
         self.spotify_access_token = json['access_token']
         return self.spotify_access_token

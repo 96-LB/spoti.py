@@ -70,6 +70,7 @@ def webhook():
             
             description = '🎵 Music Of The Activity 🎵'
             json = user.spotify_request('GET', 'me/player/recently-played')
+            print(json)
             for item in json['items']:
                 description += f'\n{item["track"]["name"]} - {item["track"]["artists"][0]["name"]}'
             if not json['items']:
