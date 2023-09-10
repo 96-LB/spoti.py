@@ -3,8 +3,10 @@ from flask import Flask, redirect, request, url_for
 from constants import STRAVA_AUTH_URL, STRAVA_CLIENT_ID, STRAVA_TOKEN_URL
 from user import User
 
+
 app = Flask(__name__)
 app.config['SERVER_NAME'] = 'spotipy.lalabuff.com'
+
 
 @app.route('/login')
 def login():
@@ -24,8 +26,6 @@ def strava_callback():
         return redirect(url_for('index', message='Invalid authorization code.'), 303)
     
     User.strava_authorize(request.args['code'])
-    
-    
     
     return redirect(url_for('index', message='Subscribed successfully!'), 303)
 

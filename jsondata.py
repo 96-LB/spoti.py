@@ -3,7 +3,6 @@ from abc import ABC
 from dataclasses import MISSING, Field, asdict, dataclass, fields
 from functools import wraps
 
-
 from types import GenericAlias
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Literal, TypeAlias, TypeGuard, TypeVar, Union, cast
 
@@ -12,9 +11,10 @@ if TYPE_CHECKING:
 else:
     SupportsRichComparison = Any
 
-T = TypeVar('T')
 
+T = TypeVar('T')
 Bindable: TypeAlias = Union['JSONData', 'JSONData.AutoList[Any]', 'JSONData.AutoDict[Any]']
+
 
 def _updater(func: Callable[..., T]) -> Callable[..., T]:
     @wraps(func)
