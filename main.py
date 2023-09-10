@@ -64,16 +64,22 @@ def webhook():
         user.strava_refresh()
         
         activity_id = request.json['object_id']
-        description = user.strava_request('GET', f'activities/{activity_id}').get('description', '')
+        old_description = user.strava_request('GET', f'activities/{activity_id}').get('description', '')
         
         if activity_id not in user.activities:
+            
+            description = '🎵 Music Of The Activity 🎵'
+            json = user.spotify_request('GET', 'me/player/recently-played')
+            for item in json['items']:
+                description += f'\n{item["track"]["name"]} - {item["track"]["artists"][0]["name"]}'
+            if not json['items']:
+                description += '\nNone :('
+            
             user.strava_request('PUT', f'activities/{activity_id}', {
-                'description':
-                    '🔒\n'+ '---' +
-                    '\n\n' + description
+                'description': f'{old_description}\n\n{description}'
             })
             user.activities.append(activity_id)
-        
+    
     return 'EVENT_RECEIVED', 200
 
 
