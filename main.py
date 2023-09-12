@@ -54,8 +54,11 @@ def spotify_callback():
     return redirect(url_for('index', message='Subscribed successfully!'), 303)
 
 
-@app.route('/strava/webhook', methods=['POST'])
+@app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
+    if request.method == 'GET':
+        return verify_webhook()
+        
     print("Webhook event received!", request.args, request.json)
     if request.json and request.json['aspect_type'] == 'create' and request.json['object_type'] == 'activity':
         user = User(request.json['owner_id'])
@@ -83,16 +86,14 @@ def webhook():
     return 'EVENT_RECEIVED', 200
 
 
-@app.route('/strava/webhook', methods=['GET'])
 def verify_webhook():
     VERIFY_TOKEN = 'BEELAU'
     mode = request.args.get('hub.mode')
     token = request.args.get('hub.verify_token')
     challenge = request.args.get('hub.challenge')
-
+    
     if mode and token:
         if mode == 'subscribe' and token == VERIFY_TOKEN:
-            print('Webhook has been verified!')
             return {'hub.challenge': challenge}
         else:
             return 'Forbidden', 403
