@@ -64,7 +64,7 @@ def webhook():
         user = User(request.json['owner_id'])
         if not user.active:
             return 'EVENT_RECEIVED', 200
-        user.strava_refresh()
+        user.refresh()
         
         activity_id = request.json['object_id']
         old_description = user.strava_request('GET', f'activities/{activity_id}').get('description', '')

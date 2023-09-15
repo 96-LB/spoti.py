@@ -112,3 +112,7 @@ class User(JSONData, folder='data/users'):
             data=data,
             headers={'Authorization': f'Bearer {self.spotify_access_token}'}
         ).json()
+
+
+    def refresh(self):
+        return self.strava_refresh(), self.spotify_refresh()
