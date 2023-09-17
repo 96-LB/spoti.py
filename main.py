@@ -37,10 +37,10 @@ def callback():
         return error('Missing state.')
     
     try:
-        state = jwt.decode(request.args['state'], SECRET_KEY)
+        state = jwt.decode(request.args['state'], SECRET_KEY, ['HS256'])
         src = state['src']
     except Exception as e:
-        return error(f'Invalid state.\n{e}')
+        return error(f'Invalid state.<br>{e}')
     
     match src:
         case 'strava':
@@ -53,13 +53,13 @@ def callback():
             return redirect(authorization_url)
         
         case 'spotify':
-            if 'user_id' not in state or not isinstance(state['user_id'], str):
-                return error('Invalid state.')
-            User(state['user_id']).spotify_authorize(request.args['code'], request.base_url.replace('http:', 'https:'))
+            if 'user_id' not in state or not isinstance(state['user_id'], int):
+                return error(f'Invalid state.<br>Invalid user id "{state.get("user_id")}".')
+            User(str(state['user_id'])).spotify_authorize(request.args['code'], request.base_url.replace('http:', 'https:'))
             return error('Subscribed successfully!') # :clueless:
         
         case _:
-            return error('Invalid state.')
+            return error(f'Invalid state.<br>Invalid source "{src}".')
 
 
 @app.route('/webhook', methods=['GET', 'POST'])
