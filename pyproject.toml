@@ -8,6 +8,8 @@ authors = ["Cap <cap@lalabuff.com>", "Blau <beelau1@terpmail.umd.edu"]
 python = ">=3.10.0"
 flask = "^2.3.3"
 requests = "^2.31.0"
+pyjwt = "^2.8.0"
+cryptography = "^41.0.3"
 
 [tool.pyright]
 strict = ["**"]

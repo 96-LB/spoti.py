@@ -1,9 +1,8 @@
-from flask import Flask, redirect, request, session, url_for
+import jwt
+from flask import Flask, redirect, request, url_for
 
 from constants import SECRET_KEY, SPOTIFY_AUTH_URL, SPOTIFY_CLIENT_ID, STRAVA_AUTH_URL, STRAVA_CLIENT_ID
 from user import User
-
-from typing import cast
 
 
 app = Flask(__name__)
@@ -12,46 +11,55 @@ app.config['SECRET_KEY'] = SECRET_KEY
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 
+def error(message: str):
+    return redirect(url_for('index', message=message), 303)
+    
 
 @app.route('/login')
 def login():
-  # Redirects to Strava authorization
-  redirect_uri = url_for('strava_callback', _external=True, _scheme='https')
+  # redirects to strava authorization
+  redirect_uri = url_for('callback', _external=True, _scheme='https')
   scopes = 'activity:write,activity:read_all'
-  authorization_url = f'{STRAVA_AUTH_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
+  state = jwt.encode({'src': 'strava'}, SECRET_KEY)
+  authorization_url = f'{STRAVA_AUTH_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}&state={state}'
   return redirect(authorization_url)
 
 
-@app.route('/strava/callback')
-def strava_callback():
+@app.route('/callback')
+def callback():
     if request.args.get('error'):
-        return redirect(url_for('index', message='EPIC FAIL! ' + request.args['error']), 303)
+        return error('EPIC FAIL! ' + request.args['error'])
     
     if not request.args.get('code'):
-        return redirect(url_for('index', message='Invalid authorization code.'), 303)
+        return error('Missing authorization code.')
     
-    user = User.strava_authorize(request.args['code'])
-    session['user_id'] = user.id
-    session.modified = True
+    if not request.args.get('state'):
+        return error('Missing state.')
     
-    redirect_uri = url_for('spotify_callback', _external=True, _scheme='https')
-    scopes = 'user-read-recently-played,user-read-private,user-read-email'
-    authorization_url = f'{SPOTIFY_AUTH_URL}?client_id={SPOTIFY_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}'
-    return redirect(authorization_url)
-
-
-@app.route('/spotify/callback')
-def spotify_callback():
-    if request.args.get('error'):
-        return redirect(url_for('index', message='EPIC FAIL! ' + request.args['error']), 303)
+    try:
+        state = jwt.decode(request.args['state'], SECRET_KEY)
+        src = state['src']
+    except Exception as e:
+        return error(f'Invalid state.\n{e}')
     
-    if not request.args.get('code'):
-        return redirect(url_for('index', message='Invalid authorization code.'), 303)
-    
-    id = cast(str, session['user_id'])
-    User(id).spotify_authorize(request.args['code'], request.base_url.replace('http:', 'https:'))
-    
-    return redirect(url_for('index', message='Subscribed successfully!'), 303)
+    match src:
+        case 'strava':
+            # redirects to spotify authorization
+            user = User.strava_authorize(request.args['code'])
+            redirect_uri = url_for('callback', _external=True, _scheme='https')
+            scopes = 'user-read-recently-played,user-read-private,user-read-email'
+            state = jwt.encode({'src': 'spotify', 'user_id': user.id}, SECRET_KEY)
+            authorization_url = f'{SPOTIFY_AUTH_URL}?client_id={SPOTIFY_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}&state={state}'
+            return redirect(authorization_url)
+        
+        case 'spotify':
+            if 'user_id' not in state or not isinstance(state['user_id'], str):
+                return error('Invalid state.')
+            User(state['user_id']).spotify_authorize(request.args['code'], request.base_url.replace('http:', 'https:'))
+            return error('Subscribed successfully!') # :clueless:
+        
+        case _:
+            return error('Invalid state.')
 
 
 @app.route('/webhook', methods=['GET', 'POST'])
