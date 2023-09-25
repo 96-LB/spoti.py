@@ -1,7 +1,7 @@
-import jwt
 from flask import Flask, redirect, request, url_for
 
 from constants import SECRET_KEY, SPOTIFY_AUTH_URL, SPOTIFY_CLIENT_ID, STRAVA_AUTH_URL, STRAVA_CLIENT_ID
+from state import JWT
 from user import User
 
 
@@ -20,7 +20,7 @@ def login():
   # redirects to strava authorization
   redirect_uri = url_for('callback', _external=True, _scheme='https')
   scopes = 'activity:write,activity:read_all'
-  state = jwt.encode({'src': 'strava'}, SECRET_KEY)
+  state = JWT(src='strava')
   authorization_url = f'{STRAVA_AUTH_URL}?client_id={STRAVA_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}&state={state}'
   return redirect(authorization_url)
 
@@ -36,30 +36,26 @@ def callback():
     if not request.args.get('state'):
         return error('Missing state.')
     
-    try:
-        state = jwt.decode(request.args['state'], SECRET_KEY, ['HS256'])
-        src = state['src']
-    except Exception as e:
-        return error(f'Invalid state.<br>{e}')
-    
-    match src:
+    jwt = JWT(request.args['state'])
+    match jwt.src:
         case 'strava':
             # redirects to spotify authorization
             user = User.strava_authorize(request.args['code'])
             redirect_uri = url_for('callback', _external=True, _scheme='https')
             scopes = 'user-read-recently-played,user-read-private,user-read-email'
-            state = jwt.encode({'src': 'spotify', 'user_id': user.id}, SECRET_KEY)
+            state = JWT(src='spotify', user_id=user.id)
             authorization_url = f'{SPOTIFY_AUTH_URL}?client_id={SPOTIFY_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={scopes}&state={state}'
             return redirect(authorization_url)
         
         case 'spotify':
-            if 'user_id' not in state or not isinstance(state['user_id'], int):
-                return error(f'Invalid state.<br>Invalid user id "{state.get("user_id")}".')
-            User(str(state['user_id'])).spotify_authorize(request.args['code'], request.base_url.replace('http:', 'https:'))
+            if not isinstance(jwt.user_id, int):
+                return error(f'Invalid state.<br>Invalid user id "{jwt.user_id}".')
+            url = request.base_url.replace('http:', 'https:')
+            User(str(jwt.user_id)).spotify_authorize(request.args['code'], url)
             return error('Subscribed successfully!') # :clueless:
         
         case _:
-            return error(f'Invalid state.<br>Invalid source "{src}".')
+            return error(f'Invalid state.<br>Invalid source "{jwt.src}".')
 
 
 @app.route('/webhook', methods=['GET', 'POST'])
