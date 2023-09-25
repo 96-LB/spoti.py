@@ -6,7 +6,6 @@ import jwt
 from constants import SECRET_KEY
 
 
-
 DataT = str | bytes | int | float | bool | dict[str, 'DataT'] | list['DataT'] | tuple['DataT', ...]
 class JWT:
     _data: dict[str, DataT]
@@ -19,7 +18,7 @@ class JWT:
         if self.__time__:
             if not isinstance(self.__time__, (int, float)):
                 raise ValueError(f'Invalid expiratinon time {self.__time__}.')
-            if not self.__time__ <= time.time():
+            if time.time() > self.__time__:
                 raise ValueError(f'Token expired.')
     
     def __str__(self):
